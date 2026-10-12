@@ -7,3 +7,5 @@ Opret en rejse, tilføj kørsel, togtider og Word/PDF-dokumenter, og gem. Kun na
 Installer via browserens menu (Installer app / Føj til hjemmeskærm). Efter første indlæsning og caching kan appen bruges offline. Word-filer åbnes eller downloades til en kompatibel dokumentapp.
 
 Lokal udvikling: `npm ci`, `npm run dev`. Produktionsbuild: `npm run build`. Push til `main` bygger og udgiver automatisk på GitHub Pages.
+
+Browsertest: `npx playwright install chromium` og `npm test`. Testen bruger den udgivne app og isolerede lokale testdata. Brug `APP_URL` for at teste en anden adresse.

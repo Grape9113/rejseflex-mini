@@ -1,31 +1,518 @@
-import { useEffect, useState } from 'react'
-import type { Attachment, Journey } from './model'
-import { blank, deleteJourney, listJourneys, meeting, previousDay, saveJourney } from './model'
-import './App.css'
-const dateText = (date: string) => date ? new Date(date+'T12:00:00').toLocaleDateString('da-DK', {day:'numeric',month:'long',year:'numeric'}) : 'Dato ikke angivet'
+import { useEffect, useState } from "react";
+import type { Attachment, Journey } from "./model";
+import {
+  blank,
+  deleteJourney,
+  listJourneys,
+  meeting,
+  previousDay,
+  saveJourney,
+} from "./model";
+import "./App.css";
+const dateText = (date: string) =>
+  date
+    ? new Date(date + "T12:00:00").toLocaleDateString("da-DK", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      })
+    : "Dato ikke angivet";
 const legs = [
- {title:'Handicapkørsel til afgangsstation', short:'Til stationen', fields:[['pickupAddress','Afhentningsadresse','text'],['departureDestination','Destinationsstation','text'],['pickupTime','Afhentningstidspunkt','time']]},
- {title:'Togrejse med DSB', short:'Med toget', fields:[['departureStation','Afgangsstation','text'],['departureTime','Afgangstidspunkt','time'],['arrivalStation','Ankomststation','text'],['arrivalTime','Ankomsttidspunkt','time']]},
- {title:'Handicapkørsel fra ankomststation', short:'Til destinationen', fields:[['arrivalPickupStation','Afhentningsstation','text'],['destinationAddress','Destinationsadresse','text'],['finalPickupTime','Afhentningstidspunkt','time']]},
-]
-function Document({file, download=false}: {file: Attachment; download?: boolean}) { const [url,setUrl]=useState(''); useEffect(()=>{const u=URL.createObjectURL(file.blob);setUrl(u);return()=>URL.revokeObjectURL(u)},[file]);return <a className="button secondary" href={url} download={download?file.name:undefined} target={download?undefined:'_blank'} rel="noopener noreferrer">{download?'Download':'Åbn'}</a> }
+  {
+    title: "Handicapkørsel til afgangsstation",
+    short: "Til stationen",
+    fields: [
+      ["pickupAddress", "Afhentningsadresse", "text"],
+      ["departureDestination", "Destinationsstation", "text"],
+      ["pickupTime", "Afhentningstidspunkt", "time"],
+    ],
+  },
+  {
+    title: "Togrejse med DSB",
+    short: "Med toget",
+    fields: [
+      ["departureStation", "Afgangsstation", "text"],
+      ["departureTime", "Afgangstidspunkt", "time"],
+      ["arrivalStation", "Ankomststation", "text"],
+      ["arrivalTime", "Ankomsttidspunkt", "time"],
+    ],
+  },
+  {
+    title: "Handicapkørsel fra ankomststation",
+    short: "Til destinationen",
+    fields: [
+      ["arrivalPickupStation", "Afhentningsstation", "text"],
+      ["destinationAddress", "Destinationsadresse", "text"],
+      ["finalPickupTime", "Afhentningstidspunkt", "time"],
+    ],
+  },
+];
+function Document({
+  file,
+  download = false,
+}: {
+  file: Attachment;
+  download?: boolean;
+}) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    const u = URL.createObjectURL(file.blob);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  return (
+    <a
+      className="button secondary"
+      href={url || undefined}
+      aria-disabled={!url}
+      download={download ? file.name : undefined}
+      target={download ? undefined : "_blank"}
+      rel="noopener noreferrer"
+    >
+      {download ? "Download" : "Åbn"}
+    </a>
+  );
+}
 export default function App() {
- const [journeys,setJourneys]=useState<Journey[]>([]), [selected,setSelected]=useState<Journey|null>(null),[draft,setDraft]=useState<Journey|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[confirm,setConfirm]=useState(false)
- const refresh=async()=>setJourneys((await listJourneys()).sort((a,b)=>a.date.localeCompare(b.date)||a.name.localeCompare(b.name,'da')))
- useEffect(()=>{refresh().catch(()=>setError('Dine rejser kunne ikke indlæses. Prøv at genindlæse siden.')).finally(()=>setLoading(false))},[])
- const change=(key: keyof Journey,value: unknown)=>setDraft(d=>d?{...d,[key]:value}:d)
- const upload=async(key:'itinerary'|'ticket',file?:File)=>{if(!file)return; if(!(key==='ticket'?/\.pdf$/i:/\.(doc|docx)$/i).test(file.name)){setError(key==='ticket'?'Vælg en PDF-fil.':'Vælg et Word-dokument (.doc eller .docx).');return} setError('');try{change(key,{name:file.name,blob:new Blob([await file.arrayBuffer()],{type:file.type||(key==='ticket'?'application/pdf':'application/octet-stream')})})}catch{setError('Filen kunne ikke læses. Prøv igen.')}}
- const persist=async(e:React.FormEvent)=>{e.preventDefault();if(!draft?.name.trim())return;setBusy(true);try{const j={...draft,name:draft.name.trim()};await saveJourney(j);await refresh();setDraft(null);setSelected(j);setError('');navigator.storage?.persist?.().catch(()=>{})}catch{setError('Rejsen kunne ikke gemmes. Kontrollér, at browseren har ledig lagerplads.')}finally{setBusy(false)}}
- const remove=async()=>{if(!selected)return;setBusy(true);try{await deleteJourney(selected.id);await refresh();setSelected(null);setConfirm(false)}catch{setError('Rejsen kunne ikke slettes. Prøv igen.')}finally{setBusy(false)}}
- const back=()=>{setDraft(null);setSelected(null);setConfirm(false);setError('');window.scrollTo(0,0)}
- const current=draft||selected
- const time=current?meeting(current.departureTime,current.interval):''
- return <div className="app"><header><a className="brand" href="#" onClick={e=>{e.preventDefault();back()}}><span className="brand-icon" aria-hidden="true">R</span>RejseFlex <span className="mini">Mini</span></a><span className="local">Gemmes på din enhed</span></header><main>
- {error&&<div role="alert" className="error">{error}</div>}
- {!current?<><div className="page-heading"><div><p className="eyebrow">DIT REJSEOVERBLIK</p><h1>Mine rejser</h1><p>Alle tre etaper. Samlet ét sted.</p></div><button onClick={()=>setDraft(blank())}>＋ Opret rejse</button></div><div className="list-heading">{journeys.length} {journeys.length===1?'rejse':'rejser'}</div>{loading?<p role="status">Indlæser rejser…</p>:journeys.length? <div className="journey-list">{journeys.map(j=><button className="journey-card" key={j.id} onClick={()=>setSelected(j)}><span className="card-mark" aria-hidden="true">↗</span><span><strong>{j.name}</strong><span className="date">{dateText(j.date)}</span><span className="summary">Handicapkørsel · {j.departureStation||'Afgangsstation'} → {j.arrivalStation||'Ankomststation'}{j.departureTime?` · ${j.departureTime}`:''} · Handicapkørsel</span></span><span className="arrow" aria-hidden="true">→</span></button>)}</div>:<div className="empty"><span aria-hidden="true" className="empty-icon">↗</span><h2>Din næste rejse starter her</h2><p>Opret en rejse, og saml kørsel, togtider<br/>og dokumenter i ét enkelt overblik.</p><button onClick={()=>setDraft(blank())}>Opret din første rejse</button></div>}<p className="footnote">Dine rejser og dokumenter bliver på denne enhed. Når appen er indlæst, kan du også bruge den offline.</p></>:<>
- <button className="back" onClick={back}>← Alle rejser</button><div className="page-heading"><div><p className="eyebrow">{draft?'PLANLÆG DIN REJSE':'DIN REJSE'}</p><h1>{draft?(selected?'Rediger rejse':'Opret rejse'):selected?.name}</h1><p>{draft?'Udfyld det, du ved. Resten kan du tilføje senere.':dateText(selected!.date)}</p></div>{!draft&&<button onClick={()=>{setDraft(selected);setConfirm(false)}}>Rediger rejse</button>}</div>
- <form onSubmit={persist}>{draft&&<section className="section"><h2>Rejsen</h2><div className="fields"><label>Rejsens navn <span className="required">*</span><input autoFocus required value={draft.name} onChange={e=>change('name',e.target.value)} placeholder="Besøg mor i København" /></label><label>Rejsedato<input type="date" value={draft.date} onChange={e=>change('date',e.target.value)}/></label></div><p className="hint">Kun rejsens navn er obligatorisk.</p></section>}
- <div className="timeline">{legs.map((leg,index)=><section className="section leg" key={leg.title}><div className="leg-heading"><span className="step">{index+1}</span><div><p className="eyebrow">{leg.short}</p><h2>{leg.title}</h2></div></div><div className="fields">{leg.fields.map(([key,label,type])=><div key={key}>{draft?<label>{label}<input type={type} value={String(draft[key as keyof Journey]||'')} onChange={e=>change(key as keyof Journey,e.target.value)}/></label>:<div className="detail-field"><span>{label}</span><strong>{String(selected![key as keyof Journey]||'Ikke angivet')}</strong></div>}{key==='departureTime'&&<div className="service">{draft&&<><span className="hint">Mød før togafgang</span><div className="segmented" role="group" aria-label="Tid før togafgang">{([15,30] as const).map(n=><button type="button" key={n} aria-pressed={draft.interval===n} onClick={()=>change('interval',n)}>{n} min</button>)}</div></>}{time&&<p className="meeting" aria-live="polite">Mødetid til Handicapservice: <strong>{time}</strong>{previousDay(current!)&&<small> Dagen før rejsedatoen</small>}</p>}</div>}</div>)}</div>{index===1&&<div className="documents"><h3>Rejsedokumenter</h3>{(['itinerary','ticket'] as const).map(key=><div className="document" key={key}><div><label className="document-label" htmlFor={key}>{key==='itinerary'?'DSB-rejseplan':'Kørestolspladsbillet'}</label><p className="hint">{key==='itinerary'?'Word · .doc eller .docx':'PDF · .pdf'}</p>{current![key]&&<p className="filename">{current![key]!.name}</p>}</div><div className="document-actions">{current![key]&&<><Document file={current![key]!}/><Document file={current![key]!} download/>{draft&&<button className="text-button danger" type="button" onClick={()=>change(key,undefined)}>Fjern</button>}</>}{draft&&<label className="button secondary upload">{current![key]?'Erstat fil':'Vælg fil'}<input id={key} type="file" accept={key==='ticket'?'.pdf':'.doc,.docx'} onChange={e=>{void upload(key,e.target.files?.[0]);e.target.value=''}}/></label>}{!draft&&!current![key]&&<span className="hint">Ingen fil tilføjet</span>}</div></div>)}</div>}</section>)}</div>
- {draft?<div className="form-actions"><button type="button" className="secondary" onClick={()=>{setDraft(null);setError('')}} disabled={busy}>Annuller</button><button type="submit" disabled={busy}>{busy?'Gemmer…':'Gem rejse'}</button></div>:<div className="delete-area">{confirm?<div role="alert"><p>Slet “{selected!.name}” og tilhørende dokumenter?</p><button type="button" className="danger solid" onClick={remove} disabled={busy}>Ja, slet rejse</button> <button type="button" className="secondary" onClick={()=>setConfirm(false)}>Annuller</button></div>:<button type="button" className="text-button danger" onClick={()=>setConfirm(true)}>Slet rejse</button>}</div>}</form></>}
- </main><footer>RejseFlex Mini <span>Et enkelt overblik. En roligere rejse.</span></footer></div>
+  const [journeys, setJourneys] = useState<Journey[]>([]),
+    [selected, setSelected] = useState<Journey | null>(null),
+    [draft, setDraft] = useState<Journey | null>(null),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true),
+    [busy, setBusy] = useState(false),
+    [confirm, setConfirm] = useState(false);
+  const refresh = async () =>
+    setJourneys(
+      (await listJourneys()).sort(
+        (a, b) =>
+          a.date.localeCompare(b.date) || a.name.localeCompare(b.name, "da"),
+      ),
+    );
+  useEffect(() => {
+    refresh()
+      .catch(() =>
+        setError("Dine rejser kunne ikke indlæses. Prøv at genindlæse siden."),
+      )
+      .finally(() => setLoading(false));
+  }, []);
+  const change = (key: keyof Journey, value: unknown) =>
+    setDraft((d) => (d ? { ...d, [key]: value } : d));
+  const upload = (key: "itinerary" | "ticket", file?: File) => {
+    if (!file) return;
+    if (!(key === "ticket" ? /\.pdf$/i : /\.(doc|docx)$/i).test(file.name)) {
+      setError(
+        key === "ticket"
+          ? "Vælg en PDF-fil."
+          : "Vælg et Word-dokument (.doc eller .docx).",
+      );
+      return;
+    }
+    setError("");
+    try {
+      change(key, {
+        name: file.name,
+        blob: new Blob([file], {
+          type:
+            file.type ||
+            (key === "ticket" ? "application/pdf" : "application/octet-stream"),
+        }),
+      });
+    } catch {
+      setError("Filen kunne ikke læses. Prøv igen.");
+    }
+  };
+  const persist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft?.name.trim()) {
+      setError("Skriv et navn til rejsen.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const j = { ...draft, name: draft.name.trim() };
+      await saveJourney(j);
+      await refresh();
+      setDraft(null);
+      setSelected(j);
+      setError("");
+      navigator.storage?.persist?.().catch(() => {});
+    } catch {
+      setError(
+        "Rejsen kunne ikke gemmes. Kontrollér, at browseren har ledig lagerplads.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await deleteJourney(selected.id);
+      await refresh();
+      setSelected(null);
+      setConfirm(false);
+    } catch {
+      setError("Rejsen kunne ikke slettes. Prøv igen.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const back = () => {
+    setDraft(null);
+    setSelected(null);
+    setConfirm(false);
+    setError("");
+    window.scrollTo(0, 0);
+  };
+  const current = draft || selected;
+  const time = current ? meeting(current.departureTime, current.interval) : "";
+  return (
+    <div className="app">
+      <header>
+        <a
+          className="brand"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            back();
+          }}
+        >
+          <span className="brand-icon" aria-hidden="true">
+            R
+          </span>
+          RejseFlex <span className="mini">Mini</span>
+        </a>
+        <span className="local">Gemmes på din enhed</span>
+      </header>
+      <main>
+        {error && (
+          <div role="alert" className="error">
+            {error}
+          </div>
+        )}
+        {!current ? (
+          <>
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">DIT REJSEOVERBLIK</p>
+                <h1>Mine rejser</h1>
+                <p>Alle tre etaper. Samlet ét sted.</p>
+              </div>
+              <button onClick={() => setDraft(blank())}>＋ Opret rejse</button>
+            </div>
+            <div className="list-heading">
+              {journeys.length} {journeys.length === 1 ? "rejse" : "rejser"}
+            </div>
+            {loading ? (
+              <p role="status">Indlæser rejser…</p>
+            ) : journeys.length ? (
+              <div className="journey-list">
+                {journeys.map((j) => (
+                  <button
+                    className="journey-card"
+                    key={j.id}
+                    onClick={() => setSelected(j)}
+                  >
+                    <span className="card-mark" aria-hidden="true">
+                      ↗
+                    </span>
+                    <span>
+                      <strong>{j.name}</strong>
+                      <span className="date">{dateText(j.date)}</span>
+                      <span className="summary">
+                        Handicapkørsel ·{" "}
+                        {j.departureStation || "Afgangsstation"} →{" "}
+                        {j.arrivalStation || "Ankomststation"}
+                        {j.departureTime ? ` · ${j.departureTime}` : ""} ·
+                        Handicapkørsel
+                      </span>
+                    </span>
+                    <span className="arrow" aria-hidden="true">
+                      →
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">
+                <span aria-hidden="true" className="empty-icon">
+                  ↗
+                </span>
+                <h2>Din næste rejse starter her</h2>
+                <p>
+                  Opret en rejse, og saml kørsel, togtider
+                  <br />
+                  og dokumenter i ét enkelt overblik.
+                </p>
+                <button onClick={() => setDraft(blank())}>
+                  Opret din første rejse
+                </button>
+              </div>
+            )}
+            <p className="footnote">
+              Dine rejser og dokumenter bliver på denne enhed. Når appen er
+              indlæst, kan du også bruge den offline.
+            </p>
+          </>
+        ) : (
+          <>
+            <button className="back" onClick={back}>
+              ← Alle rejser
+            </button>
+            <div className="page-heading">
+              <div>
+                <p className="eyebrow">
+                  {draft ? "PLANLÆG DIN REJSE" : "DIN REJSE"}
+                </p>
+                <h1>
+                  {draft
+                    ? selected
+                      ? "Rediger rejse"
+                      : "Opret rejse"
+                    : selected?.name}
+                </h1>
+                <p>
+                  {draft
+                    ? "Udfyld det, du ved. Resten kan du tilføje senere."
+                    : dateText(selected!.date)}
+                </p>
+              </div>
+              {!draft && (
+                <button
+                  onClick={() => {
+                    setDraft(selected);
+                    setConfirm(false);
+                  }}
+                >
+                  Rediger rejse
+                </button>
+              )}
+            </div>
+            <form onSubmit={persist}>
+              {draft && (
+                <section className="section">
+                  <h2>Rejsen</h2>
+                  <div className="fields">
+                    <label>
+                      Rejsens navn <span className="required">*</span>
+                      <input
+                        autoFocus
+                        required
+                        value={draft.name}
+                        onChange={(e) => change("name", e.target.value)}
+                        placeholder="Besøg mor i København"
+                      />
+                    </label>
+                    <label>
+                      Rejsedato
+                      <input
+                        type="date"
+                        value={draft.date}
+                        onChange={(e) => change("date", e.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <p className="hint">Kun rejsens navn er obligatorisk.</p>
+                </section>
+              )}
+              <div className="timeline">
+                {legs.map((leg, index) => (
+                  <section className="section leg" key={leg.title}>
+                    <div className="leg-heading">
+                      <span className="step">{index + 1}</span>
+                      <div>
+                        <p className="eyebrow">{leg.short}</p>
+                        <h2>{leg.title}</h2>
+                      </div>
+                    </div>
+                    <div className="fields">
+                      {leg.fields.map(([key, label, type]) => (
+                        <div key={key}>
+                          {draft ? (
+                            <label>
+                              {label}
+                              <input
+                                type={type}
+                                value={String(
+                                  draft[key as keyof Journey] || "",
+                                )}
+                                onChange={(e) =>
+                                  change(key as keyof Journey, e.target.value)
+                                }
+                              />
+                            </label>
+                          ) : (
+                            <div className="detail-field">
+                              <span>{label}</span>
+                              <strong>
+                                {String(
+                                  selected![key as keyof Journey] ||
+                                    "Ikke angivet",
+                                )}
+                              </strong>
+                            </div>
+                          )}
+                          {key === "departureTime" && (
+                            <div className="service">
+                              {draft && (
+                                <>
+                                  <span className="hint">
+                                    Mød før togafgang
+                                  </span>
+                                  <div
+                                    className="segmented"
+                                    role="group"
+                                    aria-label="Tid før togafgang"
+                                  >
+                                    {([15, 30] as const).map((n) => (
+                                      <button
+                                        type="button"
+                                        key={n}
+                                        aria-pressed={draft.interval === n}
+                                        onClick={() => change("interval", n)}
+                                      >
+                                        {n} min
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                              {time && (
+                                <p className="meeting" aria-live="polite">
+                                  Mødetid til Handicapservice:{" "}
+                                  <strong>{time}</strong>
+                                  {previousDay(current!) && (
+                                    <small> Dagen før rejsedatoen</small>
+                                  )}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {index === 1 && (
+                      <div className="documents">
+                        <h3>Rejsedokumenter</h3>
+                        {(["itinerary", "ticket"] as const).map((key) => (
+                          <div className="document" key={key}>
+                            <div>
+                              <label className="document-label" htmlFor={key}>
+                                {key === "itinerary"
+                                  ? "DSB-rejseplan"
+                                  : "Kørestolspladsbillet"}
+                              </label>
+                              <p className="hint">
+                                {key === "itinerary"
+                                  ? "Word · .doc eller .docx"
+                                  : "PDF · .pdf"}
+                              </p>
+                              {current![key] && (
+                                <p className="filename">
+                                  {current![key]!.name}
+                                </p>
+                              )}
+                            </div>
+                            <div className="document-actions">
+                              {current![key] && (
+                                <>
+                                  <Document file={current![key]!} />
+                                  <Document file={current![key]!} download />
+                                  {draft && (
+                                    <button
+                                      className="text-button danger"
+                                      type="button"
+                                      onClick={() => change(key, undefined)}
+                                    >
+                                      Fjern
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                              {draft && (
+                                <label className="button secondary upload">
+                                  {current![key] ? "Erstat fil" : "Vælg fil"}
+                                  <input
+                                    id={key}
+                                    type="file"
+                                    accept={
+                                      key === "ticket" ? ".pdf" : ".doc,.docx"
+                                    }
+                                    onChange={(e) => {
+                                      void upload(key, e.target.files?.[0]);
+                                      e.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              )}
+                              {!draft && !current![key] && (
+                                <span className="hint">Ingen fil tilføjet</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                ))}
+              </div>
+              {draft ? (
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setDraft(null);
+                      setError("");
+                    }}
+                    disabled={busy}
+                  >
+                    Annuller
+                  </button>
+                  <button type="submit" disabled={busy}>
+                    {busy ? "Gemmer…" : "Gem rejse"}
+                  </button>
+                </div>
+              ) : (
+                <div className="delete-area">
+                  {confirm ? (
+                    <div role="alert">
+                      <p>Slet “{selected!.name}” og tilhørende dokumenter?</p>
+                      <button
+                        type="button"
+                        className="danger solid"
+                        onClick={remove}
+                        disabled={busy}
+                      >
+                        Ja, slet rejse
+                      </button>{" "}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => setConfirm(false)}
+                      >
+                        Annuller
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-button danger"
+                      onClick={() => setConfirm(true)}
+                    >
+                      Slet rejse
+                    </button>
+                  )}
+                </div>
+              )}
+            </form>
+          </>
+        )}
+      </main>
+      <footer>
+        RejseFlex Mini <span>Et enkelt overblik. En roligere rejse.</span>
+      </footer>
+    </div>
+  );
 }
